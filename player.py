@@ -59,6 +59,8 @@ class Player(Sprite, Singleton):
 		self.accel = .5
 		self.deccel = .6
 		self.dead = False
+		self.landed_this_frame = False
+		self.bonus_this_frame = False
 	
 
 	def _fix_velocity(self) -> None:
@@ -74,9 +76,12 @@ class Player(Sprite, Singleton):
 	def reset(self) -> None:
 		" Called only when game restarts (after player death)."
 		self._velocity = Vector2()
+		self._input = 0
 		self.rect = self.__startrect.copy()
 		self.camera_rect = self.__startrect.copy()
 		self.dead = False
+		self.landed_this_frame = False
+		self.bonus_this_frame = False
 
 
 	def handle_event(self,event:Event) -> None:
@@ -95,8 +100,24 @@ class Player(Sprite, Singleton):
 		#Check if stop moving
 		elif event.type == KEYUP:
 			if (event.key== K_LEFT and self._input==-1) or (
-					event.key==K_RIGHT and self._input==1):
+				event.key==K_RIGHT and self._input==1):
 				self._input = 0
+
+	def apply_action(self, action:int) -> None:
+		"""Apply a discrete agent action.
+		0 = left, 1 = no-op, 2 = right.
+		"""
+		assert action in (0, 1, 2), "Invalid action"
+		if action == 0:
+			if self._input != -1 and self._velocity.x >= 0:
+				self._velocity.x = -self.__startspeed
+			self._input = -1
+		elif action == 2:
+			if self._input != 1 and self._velocity.x <= 0:
+				self._velocity.x = self.__startspeed
+			self._input = 1
+		else:
+			self._input = 0
 	
 
 	def jump(self,force:float=None) -> None:
@@ -107,6 +128,7 @@ class Player(Sprite, Singleton):
 	def onCollide(self, obj:Sprite) -> None:
 		self.rect.bottom = obj.rect.top
 		self.jump()
+		self.landed_this_frame = True
 	
 
 	def collisions(self) -> None:
@@ -122,6 +144,7 @@ class Player(Sprite, Singleton):
 				if platform.bonus and collide_rect(self,platform.bonus):
 					self.onCollide(platform.bonus)
 					self.jump(platform.bonus.force)
+					self.bonus_this_frame = True
 
 				# check collisions with platform
 				if collide_rect(self,platform):
@@ -137,6 +160,8 @@ class Player(Sprite, Singleton):
 		if self.camera_rect.y>config.YWIN*2:
 			self.dead = True
 			return
+		self.landed_this_frame = False
+		self.bonus_this_frame = False
 		#Velocity update (apply gravity, input acceleration)
 		self._velocity.y += self.gravity
 		if self._input: # accelerate
